@@ -1,0 +1,56 @@
+{
+    "name": "lucacermenati/nova-settings",
+    "description": "Tab-grouped, database-backed settings for Laravel Nova 5. Define settings in code with real Nova fields or create them from the Nova UI.",
+    "keywords": ["laravel", "nova", "settings"],
+    "license": "MIT",
+    "authors": [
+        {"name": "Luca Cermenati"}
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "laravel/nova": "^5.0"
+    },
+    "require-dev": {
+        "laravel/nova-devtool": "^1.7",
+        "laravel/pint": "^1.20",
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "pestphp/pest": "^3.0|^4.0"
+    },
+    "repositories": [
+        {"type": "composer", "url": "https://nova.laravel.com"}
+    ],
+    "autoload": {
+        "psr-4": {
+            "LucaCermenati\\NovaSettings\\": "src/"
+        },
+        "files": ["src/helpers.php"]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "LucaCermenati\\NovaSettings\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "LucaCermenati\\NovaSettings\\NovaSettingsServiceProvider"
+            ],
+            "aliases": {
+                "NovaSettings": "LucaCermenati\\NovaSettings\\Facades\\NovaSettings"
+            }
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "lint": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -55,15 +55,10 @@ class FieldFactory
      */
     public function build(string $type, string $label, string $key, array $options = [], ?string $description = null, bool $locked = false): Field
     {
-        if (! class_exists($type) || ! is_subclass_of($type, Field::class)) {
+        if (! is_subclass_of($type, Field::class) || (! $locked && ! $this->isAllowedType($type))) {
             throw UnsupportedFieldTypeException::forType($type);
         }
 
-        if (! $locked && ! $this->isAllowedType($type)) {
-            throw UnsupportedFieldTypeException::forType($type);
-        }
-
-        /** @var Field $field */
         $field = $type::make($label, $key);
 
         if ($description !== null && $description !== '') {
@@ -101,23 +96,23 @@ class FieldFactory
         return (array) config('nova-settings.field_types', []);
     }
 
-    protected function applyGeneric(Field $field, array $o): void
+    protected function applyGeneric(Field $field, array $options): void
     {
-        if (isset($o['help'])) {
-            $field->help((string) $o['help']);
+        if (isset($options['help'])) {
+            $field->help((string) $options['help']);
         }
 
-        if (isset($o['placeholder']) && method_exists($field, 'placeholder')) {
-            $field->placeholder((string) $o['placeholder']);
+        if (isset($options['placeholder'])) {
+            $field->placeholder((string) $options['placeholder']);
         }
 
-        if (array_key_exists('default', $o) && $o['default'] !== null) {
-            $field->default($o['default']);
+        if (isset($options['default'])) {
+            $field->default($options['default']);
         }
 
-        $rules = $this->normalizeRules($o['rules'] ?? []);
+        $rules = $this->normalizeRules($options['rules'] ?? []);
 
-        if (! empty($o['required'])) {
+        if (! empty($options['required'])) {
             array_unshift($rules, 'required');
         }
 
@@ -125,127 +120,168 @@ class FieldFactory
             $field->rules(...array_values(array_unique($rules)));
         }
 
-        if (! empty($o['nullable'])) {
+        if (! empty($options['nullable'])) {
             $field->nullable();
         }
 
-        if (! empty($o['readonly'])) {
+        if (! empty($options['readonly'])) {
             $field->readonly();
         }
 
-        if (! empty($o['stacked'])) {
+        if (! empty($options['stacked'])) {
             $field->stacked();
         }
 
-        if (! empty($o['fullWidth'])) {
+        if (! empty($options['fullWidth'])) {
             $field->fullWidth();
         }
 
-        if (isset($o['textAlign'])) {
-            $field->textAlign((string) $o['textAlign']);
+        if (isset($options['textAlign'])) {
+            $field->textAlign((string) $options['textAlign']);
         }
     }
 
-    protected function applyTypeSpecific(Field $field, array $o): void
+    /**
+     * Not mutually exclusive: Nova's Number (and Currency) extends Text, so a
+     * number field receives both the number and the text options.
+     */
+    protected function applyTypeSpecific(Field $field, array $options): void
     {
         if ($field instanceof Select || $field instanceof MultiSelect || $field instanceof BooleanGroup) {
-            if (isset($o['options']) && is_array($o['options'])) {
-                $field->options($o['options']);
-            }
-
-            if (! empty($o['displayUsingLabels']) && method_exists($field, 'displayUsingLabels')) {
-                $field->displayUsingLabels();
-            }
-
-            if (! empty($o['searchable']) && method_exists($field, 'searchable')) {
-                $field->searchable();
-            }
+            $this->applyChoiceOptions($field, $options);
         }
 
-        if ($field instanceof Number || $field instanceof Currency) {
-            foreach (['min', 'max', 'step'] as $method) {
-                if (isset($o[$method])) {
-                    $field->{$method}($o[$method]);
-                }
+        if ($field instanceof Number) {
+            $this->applyNumberOptions($field, $options);
+        }
+
+        if ($field instanceof Text || $field instanceof Textarea) {
+            $this->applyTextOptions($field, $options);
+        }
+
+        if ($field instanceof Code) {
+            $this->applyCodeOptions($field, $options);
+        }
+
+        if ($field instanceof File) {
+            $this->applyFileOptions($field, $options);
+        }
+
+        if ($field instanceof Boolean) {
+            $this->applyBooleanOptions($field, $options);
+        }
+
+        if ($field instanceof KeyValue) {
+            $this->applyKeyValueOptions($field, $options);
+        }
+    }
+
+    protected function applyChoiceOptions(Select|MultiSelect|BooleanGroup $field, array $options): void
+    {
+        if (isset($options['options']) && is_array($options['options'])) {
+            $field->options($options['options']);
+        }
+
+        // Not every choice field supports these (BooleanGroup has neither,
+        // MultiSelect is not searchable).
+        if (! empty($options['displayUsingLabels']) && method_exists($field, 'displayUsingLabels')) {
+            $field->displayUsingLabels();
+        }
+
+        if (! empty($options['searchable']) && method_exists($field, 'searchable')) {
+            $field->searchable();
+        }
+    }
+
+    protected function applyNumberOptions(Number $field, array $options): void
+    {
+        foreach (['min', 'max', 'step'] as $method) {
+            if (isset($options[$method])) {
+                $field->{$method}($options[$method]);
             }
         }
 
         if ($field instanceof Currency) {
-            if (isset($o['currency'])) {
-                $field->currency((string) $o['currency']);
+            if (isset($options['currency'])) {
+                $field->currency((string) $options['currency']);
             }
 
-            if (isset($o['locale'])) {
-                $field->locale((string) $o['locale']);
-            }
-        }
-
-        if ($field instanceof Textarea && isset($o['rows'])) {
-            $field->rows((int) $o['rows']);
-        }
-
-        if ($field instanceof Text || $field instanceof Textarea) {
-            if (isset($o['maxlength'])) {
-                $field->maxlength((int) $o['maxlength'], ! empty($o['enforceMaxlength']));
+            if (isset($options['locale'])) {
+                $field->locale((string) $options['locale']);
             }
         }
+    }
 
-        if ($field instanceof Code) {
-            if (isset($o['language'])) {
-                $field->language((string) $o['language']);
-            }
-
-            if (! empty($o['json'])) {
-                $field->json();
-            }
+    protected function applyTextOptions(Text|Textarea $field, array $options): void
+    {
+        if ($field instanceof Textarea && isset($options['rows'])) {
+            $field->rows((int) $options['rows']);
         }
 
-        if ($field instanceof File) {
-            $field->disk($o['disk'] ?? config('nova-settings.files.disk', 'public'));
-            $field->path($o['path'] ?? config('nova-settings.files.path', 'settings'));
+        if (isset($options['maxlength'])) {
+            $field->maxlength((int) $options['maxlength'], ! empty($options['enforceMaxlength']));
+        }
+    }
 
-            if (isset($o['acceptedTypes'])) {
-                $field->acceptedTypes((string) $o['acceptedTypes']);
-            }
-
-            if ($o['prunable'] ?? true) {
-                $field->prunable();
-            }
-
-            if (array_key_exists('deletable', $o)) {
-                $field->deletable((bool) $o['deletable']);
-            }
-
-            if ($field instanceof Image) {
-                if (isset($o['maxWidth'])) {
-                    $field->maxWidth((int) $o['maxWidth']);
-                }
-
-                if (! empty($o['squared'])) {
-                    $field->squared();
-                }
-
-                if (! empty($o['rounded'])) {
-                    $field->rounded();
-                }
-            }
+    protected function applyCodeOptions(Code $field, array $options): void
+    {
+        if (isset($options['language'])) {
+            $field->language((string) $options['language']);
         }
 
-        if ($field instanceof Boolean) {
-            if (array_key_exists('trueValue', $o)) {
-                $field->trueValue($o['trueValue']);
-            }
+        if (! empty($options['json'])) {
+            $field->json();
+        }
+    }
 
-            if (array_key_exists('falseValue', $o)) {
-                $field->falseValue($o['falseValue']);
-            }
+    protected function applyFileOptions(File $field, array $options): void
+    {
+        $field->disk($options['disk'] ?? config('nova-settings.files.disk', 'public'));
+        $field->path($options['path'] ?? config('nova-settings.files.path', 'settings'));
+
+        if (isset($options['acceptedTypes'])) {
+            $field->acceptedTypes((string) $options['acceptedTypes']);
         }
 
-        if ($field instanceof KeyValue) {
-            foreach (['keyLabel', 'valueLabel', 'actionText'] as $method) {
-                if (isset($o[$method])) {
-                    $field->{$method}((string) $o[$method]);
-                }
+        if ($options['prunable'] ?? true) {
+            $field->prunable();
+        }
+
+        if (array_key_exists('deletable', $options)) {
+            $field->deletable((bool) $options['deletable']);
+        }
+
+        if ($field instanceof Image) {
+            if (isset($options['maxWidth'])) {
+                $field->maxWidth((int) $options['maxWidth']);
+            }
+
+            if (! empty($options['squared'])) {
+                $field->squared();
+            }
+
+            if (! empty($options['rounded'])) {
+                $field->rounded();
+            }
+        }
+    }
+
+    protected function applyBooleanOptions(Boolean $field, array $options): void
+    {
+        if (array_key_exists('trueValue', $options)) {
+            $field->trueValue($options['trueValue']);
+        }
+
+        if (array_key_exists('falseValue', $options)) {
+            $field->falseValue($options['falseValue']);
+        }
+    }
+
+    protected function applyKeyValueOptions(KeyValue $field, array $options): void
+    {
+        foreach (['keyLabel', 'valueLabel', 'actionText'] as $method) {
+            if (isset($options[$method])) {
+                $field->{$method}((string) $options[$method]);
             }
         }
     }
@@ -256,6 +292,6 @@ class FieldFactory
             return array_values(array_filter(explode('|', $rules)));
         }
 
-        return is_array($rules) ? array_values(array_filter($rules, fn ($r) => is_string($r) && $r !== '')) : [];
+        return is_array($rules) ? array_values(array_filter($rules, fn ($rule) => is_string($rule) && $rule !== '')) : [];
     }
 }

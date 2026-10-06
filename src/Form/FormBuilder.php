@@ -31,8 +31,7 @@ class FormBuilder
      */
     public function serialize(NovaRequest $request): array
     {
-        $bag = $this->bag();
-        $resource = $this->resource($request, $bag);
+        $resource = $this->resource($request);
 
         $fields = $resource->updateFieldsWithinPanels($request, $resource)
             ->applyDependsOnWithDefaultValues($request);
@@ -42,15 +41,11 @@ class FormBuilder
                 $field->value = null;
             }
 
-            if (is_null($field->value) && method_exists($field, 'resolveDefaultCallback')) {
-                $field->value = $field->resolveDefaultCallback($request);
-            }
+            $field->value ??= $field->resolveDefaultCallback($request);
         });
 
-        $panels = $resource->availablePanelsForUpdate($request, $resource, $fields);
-
         return [
-            'panels' => array_values($panels),
+            'panels' => array_values($resource->availablePanelsForUpdate($request, $resource, $fields)),
             'fields' => $fields->values()->all(),
         ];
     }
@@ -63,15 +58,15 @@ class FormBuilder
         $bag = $this->bag();
         $resource = $this->resource($request, $bag);
         $fields = $resource->updateFieldsWithoutReadonly($request);
+        $keys = $fields->map->attribute->all();
 
         $this->validate($request, $fields);
 
-        DB::transaction(function () use ($request, $bag, $fields) {
+        DB::transaction(function () use ($request, $bag, $fields, $keys) {
             $callbacks = $fields->map->fill($request, $bag)
-                ->filter(fn ($callback) => is_callable($callback))
-                ->values();
+                ->filter(fn ($callback) => is_callable($callback));
 
-            $this->persist($bag, $fields->map->attribute->all());
+            $this->persist($bag, $keys);
 
             // Deferred file callbacks (pruning the previous file) run after the
             // values are stored, exactly like Nova's resource controllers do.
@@ -80,7 +75,7 @@ class FormBuilder
 
         $this->manager->flushCache();
 
-        event(new SettingsSaved($fields->map->attribute->all()));
+        event(new SettingsSaved($keys));
     }
 
     /**
@@ -110,9 +105,7 @@ class FormBuilder
 
     public function resource(NovaRequest $request, ?SettingsBag $bag = null): SettingsFormResource
     {
-        $bag ??= $this->bag();
-
-        return new SettingsFormResource($bag, fn () => $this->panels());
+        return new SettingsFormResource($bag ?? $this->bag(), $this->panels(...));
     }
 
     /**
@@ -152,13 +145,8 @@ class FormBuilder
 
     protected function validate(NovaRequest $request, FieldCollection $fields): void
     {
-        $rules = [];
-        $attributes = [];
-
-        foreach ($fields as $field) {
-            $rules = array_merge($rules, $field->getUpdateRules($request));
-            $attributes[$field->validationKey()] = (string) $field->name;
-        }
+        $rules = $fields->flatMap(fn (Field $field) => $field->getUpdateRules($request))->all();
+        $attributes = $fields->mapWithKeys(fn (Field $field) => [$field->validationKey() => (string) $field->name])->all();
 
         Validator::make($request->all(), $rules, [], $attributes)->validate();
     }
@@ -170,16 +158,8 @@ class FormBuilder
      */
     protected function persist(SettingsBag $bag, array $keys): void
     {
-        $settings = Setting::query()->whereIn('key', $keys)->get()->keyBy('key');
-
-        foreach ($keys as $key) {
-            $setting = $settings->get($key);
-
-            if (! $setting) {
-                continue;
-            }
-
-            $setting->value = $bag->getAttribute($key);
+        foreach (Setting::query()->whereIn('key', $keys)->get() as $setting) {
+            $setting->value = $bag->getAttribute($setting->key);
 
             if ($setting->isDirty('value')) {
                 $setting->save();

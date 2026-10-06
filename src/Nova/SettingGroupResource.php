@@ -3,22 +3,22 @@
 namespace LucaCermenati\NovaSettings\Nova;
 
 use Illuminate\Contracts\Database\Eloquent\Builder;
-use Illuminate\Http\Request;
-use Laravel\Nova\Fields\Badge;
 use Laravel\Nova\Fields\HasMany;
 use Laravel\Nova\Fields\ID;
 use Laravel\Nova\Fields\Number;
 use Laravel\Nova\Fields\Text;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Laravel\Nova\Resource;
-use LucaCermenati\NovaSettings\Enums\Source;
 use LucaCermenati\NovaSettings\Models\SettingGroup;
+use LucaCermenati\NovaSettings\Nova\Concerns\LocksCodeManagedRows;
 
 /**
  * @extends resource<SettingGroup>
  */
 class SettingGroupResource extends Resource
 {
+    use LocksCodeManagedRows;
+
     public static $model = SettingGroup::class;
 
     public static $title = 'label';
@@ -79,32 +79,9 @@ class SettingGroupResource extends Resource
                 ->readonly($locked)
                 ->sortable(),
 
-            Badge::make(__('Source'), 'source')
-                ->resolveUsing(fn ($value) => $value instanceof Source ? $value->value : $value)
-                ->map(['code' => 'info', 'database' => 'success'])
-                ->labels(['code' => __('Defined in code'), 'database' => __('Created in Nova')]),
+            $this->sourceBadge(),
 
             HasMany::make(__('Settings'), 'settings', SettingResource::class),
         ];
-    }
-
-    public function authorizedToUpdate(Request $request): bool
-    {
-        return ! $this->isLocked() && parent::authorizedToUpdate($request);
-    }
-
-    public function authorizedToDelete(Request $request): bool
-    {
-        return ! $this->isLocked() && parent::authorizedToDelete($request);
-    }
-
-    public function authorizedToReplicate(Request $request): bool
-    {
-        return false;
-    }
-
-    protected function isLocked(): bool
-    {
-        return $this->resource instanceof SettingGroup && $this->resource->exists && $this->resource->isManagedByCode();
     }
 }

@@ -32,7 +32,7 @@ class Registry
      */
     public function groups(): Collection
     {
-        return collect($this->groups)->values()->sortBy([['order', 'asc']])->values();
+        return collect($this->groups)->sortBy('order')->values();
     }
 
     public function get(string $key): ?GroupDefinition

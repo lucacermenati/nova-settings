@@ -29,7 +29,7 @@ class SettingGroup extends Model
 
     public function settings(): HasMany
     {
-        return $this->hasMany(Setting::class)->orderBy('sort_order')->orderBy('id');
+        return $this->hasMany(Setting::class)->ordered();
     }
 
     public function scopeOrdered(Builder $query): Builder

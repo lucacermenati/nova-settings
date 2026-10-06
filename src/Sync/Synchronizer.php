@@ -2,6 +2,7 @@
 
 namespace LucaCermenati\NovaSettings\Sync;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Laravel\Nova\Fields\Field;
 use Laravel\Nova\Http\Requests\NovaRequest;
@@ -34,7 +35,7 @@ class Synchronizer
                 $group = $this->syncGroup($definition, $report);
                 $groupKeys[] = $group->key;
 
-                foreach ($definition->fields()->values() as $index => $field) {
+                foreach ($definition->fields() as $index => $field) {
                     $this->syncSetting($group, $field, $index + 1, $request, $report);
                     $settingKeys[] = $field->attribute;
                 }
@@ -72,7 +73,7 @@ class Synchronizer
     {
         $setting = Setting::query()->firstOrNew(['key' => $field->attribute]);
 
-        $options = $setting->options ?? [];
+        $options = $setting->fieldOptions();
         $default = $this->defaultOf($field, $request);
 
         if ($default !== null) {
@@ -107,27 +108,36 @@ class Synchronizer
      */
     protected function handleOrphans(array $groupKeys, array $settingKeys, bool $prune, SyncReport $report): void
     {
-        $orphanSettings = Setting::query()
-            ->where('source', Source::Code->value)
-            ->whereNotIn('key', $settingKeys ?: [''])
-            ->get();
-
+        $orphanSettings = $this->orphans(Setting::class, $settingKeys);
         $report->orphanedSettings = $orphanSettings->pluck('key')->all();
 
         if ($prune) {
             $orphanSettings->each->delete();
         }
 
-        $orphanGroups = SettingGroup::query()
-            ->where('source', Source::Code->value)
-            ->whereNotIn('key', $groupKeys ?: [''])
-            ->get();
-
+        $orphanGroups = $this->orphans(SettingGroup::class, $groupKeys);
         $report->orphanedGroups = $orphanGroups->pluck('key')->all();
 
         if ($prune) {
             $orphanGroups->filter(fn (SettingGroup $group) => $group->settings()->doesntExist())->each->delete();
         }
+    }
+
+    /**
+     * Code-sourced rows of the given model whose key is not in the given list.
+     *
+     * @template TModel of Setting|SettingGroup
+     *
+     * @param  class-string<TModel>  $model
+     * @param  array<int, string>  $keys
+     * @return Collection<int, TModel>
+     */
+    protected function orphans(string $model, array $keys): Collection
+    {
+        return $model::query()
+            ->where('source', Source::Code->value)
+            ->whereNotIn('key', $keys)
+            ->get();
     }
 
     protected function defaultOf(Field $field, NovaRequest $request): mixed

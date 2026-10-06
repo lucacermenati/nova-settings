@@ -3,11 +3,9 @@
 namespace LucaCermenati\NovaSettings\Nova;
 
 use Illuminate\Contracts\Database\Eloquent\Builder;
-use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Laravel\Nova\Fields\Badge;
 use Laravel\Nova\Fields\BelongsTo;
 use Laravel\Nova\Fields\FormData;
 use Laravel\Nova\Fields\ID;
@@ -20,9 +18,9 @@ use Laravel\Nova\Fields\Textarea;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Laravel\Nova\Resource;
 use LucaCermenati\NovaSettings\Casting\ValueCaster;
-use LucaCermenati\NovaSettings\Enums\Source;
 use LucaCermenati\NovaSettings\Fields\FieldFactory;
 use LucaCermenati\NovaSettings\Models\Setting;
+use LucaCermenati\NovaSettings\Nova\Concerns\LocksCodeManagedRows;
 use LucaCermenati\NovaSettings\Nova\Filters\SettingGroupFilter;
 use LucaCermenati\NovaSettings\Rules\ChoicesNotEmpty;
 
@@ -31,6 +29,8 @@ use LucaCermenati\NovaSettings\Rules\ChoicesNotEmpty;
  */
 class SettingResource extends Resource
 {
+    use LocksCodeManagedRows;
+
     public static $model = Setting::class;
 
     public static $title = 'label';
@@ -64,7 +64,7 @@ class SettingResource extends Resource
     public function fields(NovaRequest $request): array
     {
         $locked = fn () => $this->isLocked();
-        $types = (array) config('nova-settings.field_types', []);
+        $types = app(FieldFactory::class)->allowedTypes();
 
         return [
             ID::make()->sortable(),
@@ -118,10 +118,7 @@ class SettingResource extends Resource
                 ->readonly($locked)
                 ->sortable(),
 
-            Badge::make(__('Source'), 'source')
-                ->resolveUsing(fn ($value) => $value instanceof Source ? $value->value : $value)
-                ->map(['code' => 'info', 'database' => 'success'])
-                ->labels(['code' => __('Defined in code'), 'database' => __('Created in Nova')]),
+            $this->sourceBadge(),
 
             Text::make(__('Current value'), fn () => $this->displayValue())
                 ->exceptOnForms(),
@@ -135,45 +132,25 @@ class SettingResource extends Resource
         ];
     }
 
-    public function authorizedToUpdate(Request $request): bool
-    {
-        return ! $this->isLocked() && parent::authorizedToUpdate($request);
-    }
-
-    public function authorizedToDelete(Request $request): bool
-    {
-        return ! $this->isLocked() && parent::authorizedToDelete($request);
-    }
-
-    public function authorizedToReplicate(Request $request): bool
-    {
-        return false;
-    }
-
     /**
      * Hidden dependent fields are not submitted, so switching a Select to another
      * type would leave its choices behind: drop them whenever the type has no use for them.
+     *
+     * @param  Setting  $model
      */
     protected static function fillFields(NovaRequest $request, $model, Collection $fields): array
     {
         [$model, $callbacks] = parent::fillFields($request, $model, $fields);
 
-        if ($model instanceof Setting) {
-            $options = $model->fieldOptions();
+        $options = $model->fieldOptions();
 
-            if (! FieldFactory::requiresChoices((string) $model->type)) {
-                unset($options['options']);
-            }
-
-            $model->options = $options === [] ? null : $options;
+        if (! FieldFactory::requiresChoices((string) $model->type)) {
+            unset($options['options']);
         }
 
-        return [$model, $callbacks];
-    }
+        $model->options = $options === [] ? null : $options;
 
-    protected function isLocked(): bool
-    {
-        return $this->resource instanceof Setting && $this->resource->exists && $this->resource->isManagedByCode();
+        return [$model, $callbacks];
     }
 
     protected function displayValue(): ?string

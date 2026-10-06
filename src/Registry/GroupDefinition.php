@@ -55,9 +55,10 @@ class GroupDefinition
      */
     public function fields(): FieldCollection
     {
-        $fields = collect(($this->fields)())->flatten()->filter(fn ($field) => $field instanceof Field);
-
-        return FieldCollection::make($fields->values()->all());
+        return FieldCollection::make(($this->fields)())
+            ->flatten()
+            ->whereInstanceOf(Field::class)
+            ->values();
     }
 
     /**

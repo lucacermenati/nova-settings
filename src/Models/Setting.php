@@ -102,9 +102,17 @@ class Setting extends Model
         return $this->fieldOptions()['disk'] ?? config('nova-settings.files.disk', 'public');
     }
 
+    /**
+     * Whether this is a File / Image setting with a path stored.
+     */
+    public function hasStoredFile(): bool
+    {
+        return $this->isFile() && is_string($this->value) && $this->value !== '';
+    }
+
     public function deleteStoredFile(): void
     {
-        if ($this->isFile() && is_string($this->value) && $this->value !== '') {
+        if ($this->hasStoredFile()) {
             Storage::disk($this->storageDisk())->delete($this->value);
         }
     }

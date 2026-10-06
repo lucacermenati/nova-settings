@@ -90,15 +90,11 @@ class SettingsManager
         }
 
         try {
-            if ($this->store()->get($this->cacheKey('fingerprint')) === $this->registry->fingerprint()) {
-                return;
-            }
+            $upToDate = $this->store()->get($this->cacheKey('fingerprint')) === $this->registry->fingerprint();
 
-            if (! Schema::hasTable('settings')) {
-                return;
+            if (! $upToDate && Schema::hasTable('settings')) {
+                $this->sync();
             }
-
-            $this->sync();
         } catch (Throwable $e) {
             report($e);
         }
@@ -133,9 +129,7 @@ class SettingsManager
      */
     public function set(string $key, mixed $value): void
     {
-        $setting = Setting::query()->where('key', $key)->firstOrFail();
-        $setting->value = $value;
-        $setting->save();
+        Setting::query()->where('key', $key)->firstOrFail()->update(['value' => $value]);
 
         $this->flushCache();
     }
@@ -152,14 +146,14 @@ class SettingsManager
     {
         $setting = Setting::query()->where('key', $key)->first();
 
-        if (! $setting || ! $setting->isFile() || ! is_string($setting->value) || $setting->value === '') {
+        if (! $setting?->hasStoredFile()) {
             return null;
         }
 
         $field = $this->fieldFor($setting);
-        $disk = $field instanceof File ? ($field->getStorageDisk() ?? $setting->storageDisk()) : $setting->storageDisk();
+        $disk = $field instanceof File ? $field->getStorageDisk() : null;
 
-        return Storage::disk($disk)->url($setting->value);
+        return Storage::disk($disk ?? $setting->storageDisk())->url($setting->value);
     }
 
     public function flushCache(): void
@@ -178,18 +172,22 @@ class SettingsManager
      */
     protected function values(): array
     {
-        if ($this->loaded !== null) {
-            return $this->loaded;
-        }
+        return $this->loaded ??= $this->cachedValues();
+    }
 
+    /**
+     * @return array<string, mixed>
+     */
+    protected function cachedValues(): array
+    {
         if (! config('nova-settings.cache.enabled', true)) {
-            return $this->loaded = $this->load();
+            return $this->load();
         }
 
         try {
-            return $this->loaded = $this->store()->rememberForever($this->cacheKey('values'), fn () => $this->load());
+            return $this->store()->rememberForever($this->cacheKey('values'), $this->load(...));
         } catch (Throwable) {
-            return $this->loaded = $this->load();
+            return $this->load();
         }
     }
 
@@ -204,16 +202,12 @@ class SettingsManager
             return [];
         }
 
-        $values = [];
-
-        foreach ($settings as $setting) {
+        return $settings->mapWithKeys(function (Setting $setting) {
             $options = $setting->fieldOptions();
-            $raw = $setting->value ?? ($options['default'] ?? null);
+            $raw = $setting->value ?? $options['default'] ?? null;
 
-            $values[$setting->key] = ValueCaster::cast($setting->type, $raw, $options);
-        }
-
-        return $values;
+            return [$setting->key => ValueCaster::cast($setting->type, $raw, $options)];
+        })->all();
     }
 
     protected function store(): Repository

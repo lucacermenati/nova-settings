@@ -21,11 +21,7 @@ class NovaSettingsServiceProvider extends ServiceProvider
 
         $this->app->singleton(Registry::class);
         $this->app->singleton(FieldFactory::class);
-        $this->app->singleton(SettingsManager::class, fn ($app) => new SettingsManager(
-            $app->make(Registry::class),
-            $app->make(FieldFactory::class),
-            $app->make('cache'),
-        ));
+        $this->app->singleton(SettingsManager::class);
     }
 
     public function boot(): void
@@ -44,9 +40,7 @@ class NovaSettingsServiceProvider extends ServiceProvider
             $this->commands([SyncCommand::class]);
         }
 
-        $this->app->booted(function () {
-            $this->routes();
-        });
+        $this->app->booted(fn () => $this->routes());
 
         if (config('nova-settings.manage_definitions', true)) {
             Nova::resources([SettingGroupResource::class, SettingResource::class]);
@@ -60,11 +54,12 @@ class NovaSettingsServiceProvider extends ServiceProvider
         }
 
         $path = trim(config('nova-settings.tool.path', 'nova-settings'), '/');
+        $middleware = ['nova', Authenticate::class, Authorize::class];
 
-        Nova::router(['nova', Authenticate::class, Authorize::class], $path)
+        Nova::router($middleware, $path)
             ->group(__DIR__.'/../routes/inertia.php');
 
-        Route::middleware(['nova', Authenticate::class, Authorize::class])
+        Route::middleware($middleware)
             ->prefix('nova-vendor/nova-settings')
             ->group(__DIR__.'/../routes/api.php');
     }

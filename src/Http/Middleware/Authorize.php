@@ -16,15 +16,10 @@ class Authorize
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $tool = collect(Nova::registeredTools())->first([$this, 'matchesTool']);
+        $tool = collect(Nova::registeredTools())->first($this->matchesTool(...));
 
-        if (is_null($tool)) {
-            abort(404);
-        }
-
-        if (! $tool->authorize($request)) {
-            abort(403);
-        }
+        abort_if(is_null($tool), 404);
+        abort_unless($tool->authorize($request), 403);
 
         return $next($request);
     }

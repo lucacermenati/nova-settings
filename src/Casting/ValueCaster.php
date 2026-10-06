@@ -2,6 +2,7 @@
 
 namespace LucaCermenati\NovaSettings\Casting;
 
+use DateTimeInterface;
 use Illuminate\Support\Carbon;
 use Laravel\Nova\Fields\Boolean;
 use Laravel\Nova\Fields\BooleanGroup;
@@ -51,7 +52,7 @@ class ValueCaster
             $value === null => null,
             is_bool($value) => $value ? 'true' : 'false',
             is_array($value) => json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            $value instanceof \DateTimeInterface => $value->format('Y-m-d H:i:s'),
+            $value instanceof DateTimeInterface => $value->format('Y-m-d H:i:s'),
             default => (string) $value,
         };
     }
@@ -67,15 +68,11 @@ class ValueCaster
 
     protected static function toNumber(mixed $raw): mixed
     {
-        if (is_int($raw) || is_float($raw)) {
+        if (! is_string($raw) || ! is_numeric($raw)) {
             return $raw;
         }
 
-        if (! is_numeric($raw)) {
-            return $raw;
-        }
-
-        return str_contains((string) $raw, '.') || str_contains(strtolower((string) $raw), 'e')
+        return str_contains($raw, '.') || str_contains(strtolower($raw), 'e')
             ? (float) $raw
             : (int) $raw;
     }
@@ -97,7 +94,7 @@ class ValueCaster
 
     protected static function toDate(mixed $raw): mixed
     {
-        if ($raw instanceof \DateTimeInterface) {
+        if ($raw instanceof DateTimeInterface) {
             return $raw;
         }
 

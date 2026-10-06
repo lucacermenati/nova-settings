@@ -21,8 +21,8 @@ class SyncCommand extends Command
         ]);
 
         $orphans = array_merge(
-            array_map(fn ($k) => "group {$k}", $report->orphanedGroups),
-            array_map(fn ($k) => "setting {$k}", $report->orphanedSettings),
+            array_map(fn (string $key) => "group {$key}", $report->orphanedGroups),
+            array_map(fn (string $key) => "setting {$key}", $report->orphanedSettings),
         );
 
         if ($orphans !== []) {

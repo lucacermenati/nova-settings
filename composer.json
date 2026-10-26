@@ -1,11 +1,23 @@
 {
     "name": "lucacermenati/nova-settings",
     "description": "Tab-grouped, database-backed settings for Laravel Nova 5. Define settings in code with real Nova fields or create them from the Nova UI.",
-    "keywords": ["laravel", "nova", "settings"],
+    "keywords": [
+        "laravel",
+        "nova",
+        "settings"
+    ],
+    "homepage": "https://github.com/lucacermenati/nova-settings",
     "license": "MIT",
     "authors": [
-        {"name": "Luca Cermenati"}
+        {
+            "name": "Luca Cermenati",
+            "email": "luca@igne.nl"
+        }
     ],
+    "support": {
+        "issues": "https://github.com/lucacermenati/nova-settings/issues",
+        "source": "https://github.com/lucacermenati/nova-settings"
+    },
     "require": {
         "php": "^8.2",
         "illuminate/support": "^11.0|^12.0|^13.0",
@@ -18,13 +30,18 @@
         "pestphp/pest": "^3.0|^4.0"
     },
     "repositories": [
-        {"type": "composer", "url": "https://nova.laravel.com"}
+        {
+            "type": "composer",
+            "url": "https://nova.laravel.com"
+        }
     ],
     "autoload": {
         "psr-4": {
             "LucaCermenati\\NovaSettings\\": "src/"
         },
-        "files": ["src/helpers.php"]
+        "files": [
+            "src/helpers.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
@@ -51,6 +68,5 @@
             "pestphp/pest-plugin": true
         }
     },
-    "minimum-stability": "dev",
     "prefer-stable": true
 }

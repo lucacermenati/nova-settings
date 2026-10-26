@@ -95,6 +95,26 @@ array with any of the keys listed in `FieldFactory`: `help`, `placeholder`, `def
 `language`/`json`, `disk`/`path`/`acceptedTypes`/`maxWidth`, `trueValue`/`falseValue`,
 `keyLabel`/`valueLabel`/`actionText`.
 
+### Authorization
+
+The settings page is shown to anyone who can see the tool; restrict it with `canSee`
+when registering it (`NovaSettings::make()->canSee(fn ($request) => ...)`). The two
+definition resources are ordinary Nova resources backed by the `Setting` and
+`SettingGroup` models, so they honour any policy you register for those models:
+
+```php
+use Illuminate\Support\Facades\Gate;
+use LucaCermenati\NovaSettings\Models\Setting;
+use LucaCermenati\NovaSettings\Models\SettingGroup;
+
+Gate::policy(Setting::class, SettingPolicy::class);
+Gate::policy(SettingGroup::class, SettingGroupPolicy::class);
+```
+
+To hide the definition resources entirely set `manage_definitions` to `false` in the
+config. The [nova-playground](https://github.com/lucacermenati/nova-playground) app shows
+a complete role-based setup.
+
 ## Reading values
 
 ```php
@@ -115,6 +135,13 @@ Values are cached forever (see `cache` in the config) and the cache is cleared w
 setting is saved. Values are cast according to their field class: Boolean → `bool`,
 Number → `int|float`, Currency → `float`, MultiSelect / BooleanGroup / KeyValue → `array`,
 Code with `json` → `array`, Date / DateTime → `Carbon`.
+
+## Example application
+
+The [nova-playground](https://github.com/lucacermenati/nova-playground) repository is a
+small Laravel Nova application that uses this package end to end: it registers the tool,
+defines a few setting groups in code and reads the values from the app. Use it as a
+reference for wiring the package into your own project.
 
 ## Configuration
 
@@ -138,6 +165,10 @@ vendor/bin/pest
 
 The compiled assets in `dist/` are committed, so host applications never need a build.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE).
